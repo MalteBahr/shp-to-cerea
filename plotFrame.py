@@ -18,9 +18,18 @@ import os
 import numpy as np
 matplotlib.use('TkAgg')
 
+
 class PlotFrame(Frame):
-    
-    # direction (of points): -1 = clockwise, 1 = anticlockwise 
+
+    def disable_stuff(self):
+        self.importbutt.config(state="normal")
+        self.KBS_IN.config(state="readonly")
+        self.KBS_OUT.config(state="readonly")
+        self.subdivisions.config(state="readonly")
+        self.submitbut.config(state="disabled")
+
+
+    # direction (of points): -1 = clockwise, 1 = anticlockwise
     def offset_polygon(self, poly, direction, distance):
         normal_vectors = list()
         for i in range(len(poly)):
@@ -28,7 +37,7 @@ class PlotFrame(Frame):
             a = np.array(poly[(i-1)%len(poly)])
             b = np.array(poly[i])
             c = np.array(poly[(i+1)%len(poly)])
-            if (a==b).all():
+            if (a==b).all() or (b==c).all():
                 raise Exception()
             # # line g from point a to point b:
             # #   g = a + t*(b-a)
@@ -58,7 +67,7 @@ class PlotFrame(Frame):
 
             dot_prod = d1_n[0]*d2_n[0]+d1_n[1]*d2_n[1]
             alpha = np.arccos(dot_prod)
-            print(alpha)
+            #print(alpha)
             zcross = d1_n[0]*d2_n[1] - d1_n[1]*d2_n[0]
 
             if zcross > 0:
@@ -79,12 +88,12 @@ class PlotFrame(Frame):
             
             
             
-    def import_shp(self):
+    def import_shp(self,KBS_IN,KBS_OUT):
         self.filename = filedialog.askopenfilename(initialdir=os.getcwd(), title="Waehle die zu öffnende Shape-Datei(.shp) aus",filetypes = (("Shape-Dateien","*.shp"),("Alle Dateien","*.*")))
         if not self.filename:
             return
         #print(self.filename)
-
+        self.importbutt.config(state="disabled")
         sf = shapefile.Reader(self.filename)
 
         print('number of shapes imported:', len(sf.shapes()))
@@ -94,9 +103,11 @@ class PlotFrame(Frame):
             if not name.startswith('__'):
                 print(name)
         self.sf = sf
-        self.plot_sf()
+        self.plot_sf(KBS_IN,KBS_OUT)
 
-    def plot_sf(self):
+    def plot_sf(self,KBS_IN,KBS_OUT):
+        inProj = Proj(init='epsg:' + KBS_IN)
+        outProj = Proj(init='epsg:' + KBS_OUT)
         matplotlib.pyplot.clf()
         shapes = list()
         shapes_vgw = list()
@@ -109,11 +120,19 @@ class PlotFrame(Frame):
             npoints = len(shape.points)  # total points
             nparts = len(shape.parts)  # total parts
 
+            #transform(inProj,outProj,self.shapes[z][b][0],self.shapes[z][b][1])
             if nparts == 1:
                 shapes.append([])
                 for ip in range(len(shape.points)):
-                    shapes[-1].append(shape.points[ip])
-
+                    coord = transform(inProj,outProj,shape.points[ip][0],shape.points[ip][1])
+                    if len(shapes[-1]) > 0:
+                        last = shapes[-1][-1]
+                        if last != coord:
+                            shapes[-1].append(coord)
+                    else:
+                        shapes[-1].append(coord)
+                if shapes[-1][-1] == shapes[-1][0]:
+                    shapes[-1].pop()
 
                 xs = [coords[0] for coords in shapes[-1]]
                 ys = [coords[1] for coords in shapes[-1]]
@@ -128,8 +147,8 @@ class PlotFrame(Frame):
             else:
                 multiple_part_polygons_count += 1
             i = i + 1
-        print(shape_types)
-        print(multiple_part_polygons_count)
+        #print(shape_types)
+        #print(multiple_part_polygons_count)
 
         if multiple_part_polygons_count > 0:
             messagebox.showwarning("Mehrere Teile in Polygon", "{} Polygon(s) bzw. Felder bestehen aus mehreren Teilen und konnten nicht verarbeitet werden.".format(multiple_part_polygons_count))
@@ -151,56 +170,7 @@ class PlotFrame(Frame):
             return
         if not os.path.isdir(self.foldername):
             messagebox.showerror("Error","Das hätte nicht passieren dürfen, der Ordner den du angegeben hast existiert nicht")
-        ### create extra points on straight lines, because cerea can't handle simple polygons
 
-        # self.shapes_subdivided = deepcopy(self.shapes)
-        # self.shapes_vgw_subdivided = deepcopy(self.shapes_vgw)
-        #
-        # for z in range(len(self.shapes_subdivided)):
-        #     for b in range(len(self.shapes_subdivided[z])):
-        #         self.shapes_subdivided[z][b] = transform(inProj,outProj,self.shapes[z][b][0],self.shapes[z][b][1])
-        # for z in range(len(self.shapes_vgw_subdivided)):
-        #     for b in range(len(self.shapes_vgw_subdivided[z])):
-        #         self.shapes_vgw_subdivided[z][b] = transform(inProj,outProj,self.shapes_vgw[z][b][0],self.shapes_vgw[z][b][1])
-        #
-        #
-        # for z in range(len(self.shapes_subdivided)):
-        #     points_tmp = list()
-        #     ## unterteile c mal
-        #     for a in range(c):
-        #         # den z-ten shape (polygon/feld) unterteilen
-        #         for b in range(len(self.shapes_subdivided[z]) - 1):
-        #             points_tmp.append(self.shapes_subdivided[z][b])
-        #             points_tmp.append([(float(self.shapes_subdivided[z][b][0]) + float(self.shapes_subdivided[z][b + 1][0])) / 2,
-        #                                (float(self.shapes_subdivided[z][b][1]) + float(self.shapes_subdivided[z][b + 1][1])) / 2])
-        #         points_tmp.append(self.shapes_subdivided[z][-1])
-        #         self.shapes_subdivided[z] = points_tmp
-        #         points_tmp = list()
-        #
-        # for z in range(len(self.shapes_vgw_subdivided)):
-        #     points_tmp = list()
-        #     ## unterteile c mal
-        #     for a in range(c):
-        #         # den z-ten shape (polygon/feld) unterteilen
-        #         for b in range(len(self.shapes_vgw_subdivided[z]) - 1):
-        #             points_tmp.append(self.shapes_vgw_subdivided[z][b])
-        #             points_tmp.append([(float(self.shapes_vgw_subdivided[z][b][0]) + float(self.shapes_vgw_subdivided[z][b + 1][0])) / 2,
-        #                                (float(self.shapes_vgw_subdivided[z][b][1]) + float(self.shapes_vgw_subdivided[z][b + 1][1])) / 2])
-        #         points_tmp.append(self.shapes_vgw_subdivided[z][-1])
-        #         self.shapes_vgw_subdivided[z] = points_tmp
-        #         points_tmp = list()
-
-        # saving to folders like cerea would
-
-        # header of file
-
-        # offsetDirContorno
-        # -1
-        # indexContorno
-        # 2
-        # iniPosition
-        # offset_x,offset_y
-        # points
         path = os.getcwd()
 
         try:
@@ -219,10 +189,12 @@ class PlotFrame(Frame):
                         f.write(str(offset_x) + "," + str(offset_y) + "\n")
                         f.write("points\n")
                         for coords in self.shapes[z]:
-                            f.write(str(coords[0] - offset_x) + ", " + str(coords[1] - offset_y) + ", 0.0\n")
+                            for abc in range(c):
+                                f.write(str(coords[0] - offset_x) + ", " + str(coords[1] - offset_y) + ", 0.0\n")
                         f.write("dir\n")
                         for coords in self.shapes_vgw[z]:
-                            f.write(str(-coords[1]) + ", " + str(coords[0]) + ", 0.0\n")
+                            for abc in range(c):
+                                f.write(str(-coords[1]) + ", " + str(coords[0]) + ", 0.0\n")
                 else:
                     not_overwritten += 1
             messagebox.showinfo("Erfolg!","Von {} Dateien wurden {} erfolgreich geschrieben, die restlichen wurden nicht überschrieben".format(len(self.shapes),len(self.shapes) - not_overwritten))
@@ -244,35 +216,38 @@ class PlotFrame(Frame):
         # Special type of "canvas" to allow for matplotlib graphing
         canvas = FigureCanvasTkAgg(self.fig, master=self)
         plot_widget = canvas.get_tk_widget()
-        Button(self,text="Import",command=self.import_shp).grid(row=1, column=0)
+        self.importbutt = Button(self,text="Import",state=DISABLED,command=lambda : self.import_shp(self.KBS_IN.get(),self.KBS_OUT.get()))
+        self.importbutt.grid(row=1, column=1)
         self.export_button = Button(self,text="Export",state=DISABLED,command=lambda : self.export_cerea(self.subdivisions.get(),self.KBS_IN.get(),self.KBS_OUT.get()))
-        self.export_button.grid(row=1, column=1)
+        self.export_button.grid(row=2, column=1)
         #KBS
 
         self.label_KBS_IN = Label(self, text="SHP-Format\tepsg:")
         self.label_KBS_OUT = Label(self, text="Cerea-Format\tepsg:")
-        self.label_subdivisions = Label(self,text="Unterverteilungen", cursor="question_arrow")
+        self.label_subdivisions = Label(self,text="Koordinaten doppeln (für Explorer) [?]", cursor="question_arrow")
 
         def action(event):
-            messagebox.showinfo("Erklärung","Cerea scheint eckpunkte als falsche gps punkte zu werten wenn sie weit außerhalb liegen, deshalb müssen auf den Geraden der Shape-Dateien weitere Punkte gesetzt werden, damit es so aussieht als ob man der Gerade folgt. Bei 5 Unterverteilungen wird die Gesamteckenanzahl auf n^4 erhöht.")
+            messagebox.showinfo("Erklärung","Im Explorer werden Punkte vermutlich aus Performancegründen weggelassen, deshalb werden die Eckpunkte des Feldes mehrfach in die Datei geschrieben, um das Feld komplett im Explorer anzuzeigen")
         self.label_subdivisions.bind("<Button-1>", action)
 
 
-        KBS_in_text = StringVar(self, value='6172')
-        KBS_out_text = StringVar(self, value='7417')
+        KBS_in_text = StringVar(self, value='32632')
+        KBS_out_text = StringVar(self, value='32632')
         subdivisions = StringVar(self, value='5')
 
         self.KBS_IN = Entry(self,textvariable=KBS_in_text)
         self.KBS_OUT = Entry(self,textvariable=KBS_out_text)
+        self.submitbut = Button(self, text="Bestätige Konvertierung",command=lambda : self.disable_stuff())
+        self.submitbut.grid(row=1,column=0)
         self.subdivisions = Entry(self,textvariable=subdivisions)
 
 
-        self.label_KBS_IN.grid(row=2,sticky=E)
-        self.label_KBS_OUT.grid(row=3,sticky=E)
-        self.label_subdivisions.grid(row=4,sticky=E)
-        self.KBS_IN.grid(row=2, column=1)
-        self.KBS_OUT.grid(row=3,column=1)
-        self.subdivisions.grid(row=4,column=1)
+        self.label_KBS_IN.grid(row=2,sticky=W)
+        self.label_KBS_OUT.grid(row=3,sticky=W)
+        self.label_subdivisions.grid(row=4,sticky=W)
+        self.KBS_IN.grid(row=2, column=0)
+        self.KBS_OUT.grid(row=3,column=0)
+        self.subdivisions.grid(row=4,column=0)
 
         self.is_checked = IntVar()
         self.checkbox_overwrite = Checkbutton(self,text="Überschreibe existierende Konturen",onvalue=1, offvalue=0, variable=self.is_checked)
