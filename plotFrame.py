@@ -20,6 +20,11 @@ matplotlib.use('TkAgg')
 
 
 class PlotFrame(Frame):
+    def clamp(self,n,smallest,largest):
+        val = max(smallest,min(n,largest))
+        if n>largest or n < smallest:
+            print("WARNING: Clamped " + n + " to " + val+ " for arccos")
+        return val
 
     def disable_stuff(self):
         self.importbutt.config(state="normal")
@@ -66,7 +71,7 @@ class PlotFrame(Frame):
             d2_n = d2 / np.sqrt(np.sum(d2 ** 2))
 
             dot_prod = d1_n[0]*d2_n[0]+d1_n[1]*d2_n[1]
-            alpha = np.arccos(dot_prod)
+            alpha = np.arccos(self.clamp(dot_prod,-1,1))
             #print(alpha)
             zcross = d1_n[0]*d2_n[1] - d1_n[1]*d2_n[0]
 
